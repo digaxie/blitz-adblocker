@@ -1,0 +1,24 @@
+{
+  "name": "blitz-adblocker",
+  "version": "1.0.0",
+  "description": "An open-source ad-blocker, UI optimizer, and performance patcher for the Blitz.gg desktop application.",
+  "main": "patch.js",
+  "scripts": {
+    "patch": "node patch.js",
+    "restore": "node restore.js"
+  },
+  "keywords": [
+    "blitz",
+    "blitz-gg",
+    "adblocker",
+    "adblock",
+    "electron",
+    "performance",
+    "optimizer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "asar": "^3.2.0"
+  }
+}
