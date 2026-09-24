@@ -198,8 +198,19 @@ function patchCreateWindow(filePath) {
     content = content.replace('browserView.webContents.loadURL(url);', cssBlock + '\n  browserView.webContents.loadURL(url);');
   }
 
+  // 3. Force show window and prevent silent hiding
+  content = content.replace(
+    /show:\s*!IS_TESTING\s*&&\s*!initializingWindowReCreation\s*\?\s*true\s*:\s*false,/,
+    'show: true,'
+  );
+
+  content = content.replace(
+    /let wasFocused = \(await get\("isFocused"\)\)[\s\S]*?log\.info\(\s*"\[core\]",\s*"Hiding the window"\s*\);\s*windows\.client\.hide\(\);\s*\}/,
+    'write("initializingWindowReCreation", false);\n  restoreAndFocusWindow();\n  ensureWindowIsOnADisplay();\n  if (windows.client) {\n    windows.client.show();\n    windows.client.focus();\n    windows.client.moveTop();\n  }'
+  );
+
   fs.writeFileSync(filePath, content, 'utf8');
-  console.log('[+] Patched createWindow.js (primary screen constraint & CSS injection).');
+  console.log('[+] Patched createWindow.js (primary screen constraint, CSS injection & force show).');
 }
 
 function patchWindowUtils(filePath) {
