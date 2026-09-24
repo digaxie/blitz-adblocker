@@ -415,11 +415,13 @@ function patchAutoUpdater(filePath) {
     return;
   }
 
+  // 1. Disable checkForUpdates
   content = content.replace(
     /function checkForUpdates\(\)\s*\{[^}]*\}/,
-    'function checkForUpdates() {\n  // __updater_disabled__\n  return Promise.resolve();\n}'
+    'function checkForUpdates() {\n  return Promise.resolve();\n}'
   );
 
+  // 2. Disable pollForUpdates
   const oldPoll = `function pollForUpdates() {
   checkForUpdates();
   setInterval(() => {
@@ -434,8 +436,19 @@ function patchAutoUpdater(filePath) {
     content = content.replace(oldPoll, newPoll);
   }
 
+  // 3. Bypass bootApp & closeUpdaterWindow so Blitz starts instantly without waiting
+  content = content.replace(
+    /function bootApp\([^\)]*\)\s*\{[\s\S]*?^function closeUpdaterWindow/m,
+    'function bootApp(showSplash) {\n  return Promise.resolve();\n}\n\nfunction closeUpdaterWindow'
+  );
+
+  content = content.replace(
+    /function closeUpdaterWindow\([^\)]*\)\s*\{[\s\S]*?^\}/m,
+    'function closeUpdaterWindow(timeout) {\n  if (windows.updater) {\n    try { windows.updater.close(); } catch (e) {}\n  }\n  return Promise.resolve();\n}'
+  );
+
   fs.writeFileSync(filePath, content, 'utf8');
-  console.log('[+] Patched autoUpdater.js (auto-update checks disabled).');
+  console.log('[+] Patched autoUpdater.js (instant boot & updates disabled).');
 }
 
 async function main() {
@@ -512,11 +525,21 @@ async function main() {
   fs.copyFileSync(repackedAsar, targetAsar);
   console.log(`[+] Updated: ${targetAsar}`);
 
+  const repackedUnpacked = repackedAsar + '.unpacked';
+  const targetUnpacked = targetAsar + '.unpacked';
+  if (fs.existsSync(repackedUnpacked)) {
+    fs.cpSync(repackedUnpacked, targetUnpacked, { recursive: true, force: true });
+    console.log(`[+] Updated unpacked resources: ${targetUnpacked}`);
+  }
+
   // 7. Cleanup
   console.log(`[*] Cleaning up temporary files...`);
   try {
     fs.rmSync(tempDir, { recursive: true, force: true });
     fs.unlinkSync(repackedAsar);
+    if (fs.existsSync(repackedUnpacked)) {
+      fs.rmSync(repackedUnpacked, { recursive: true, force: true });
+    }
   } catch (e) {}
 
   console.log('\n====================================================');
