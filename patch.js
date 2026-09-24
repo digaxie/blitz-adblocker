@@ -407,6 +407,37 @@ function patchAuth(filePath) {
   console.log('[+] Patched auth.js (premium role unlocked).');
 }
 
+function patchAutoUpdater(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  let content = fs.readFileSync(filePath, 'utf8');
+  if (content.includes('__updater_disabled__')) {
+    console.log('[+] autoUpdater is already disabled.');
+    return;
+  }
+
+  content = content.replace(
+    /function checkForUpdates\(\)\s*\{[^}]*\}/,
+    'function checkForUpdates() {\n  // __updater_disabled__\n  return Promise.resolve();\n}'
+  );
+
+  const oldPoll = `function pollForUpdates() {
+  checkForUpdates();
+  setInterval(() => {
+    checkForUpdates();
+  }, oneHour);
+}`;
+  const newPoll = `function pollForUpdates() {
+  // __updater_disabled__
+  log.info("[core]", "[Updater] Auto-updates disabled by patcher");
+}`;
+  if (content.includes(oldPoll)) {
+    content = content.replace(oldPoll, newPoll);
+  }
+
+  fs.writeFileSync(filePath, content, 'utf8');
+  console.log('[+] Patched autoUpdater.js (auto-update checks disabled).');
+}
+
 async function main() {
   console.log('====================================================');
   console.log('     Blitz.gg Ad-Blocker & Performance Patcher      ');
@@ -416,6 +447,18 @@ async function main() {
 
   const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE, 'AppData', 'Local');
   const appData = process.env.APPDATA || path.join(process.env.USERPROFILE, 'AppData', 'Roaming');
+
+  // Clear blitz-updater cache so pending updates don't fire
+  const updaterDir = path.join(localAppData, 'blitz-updater');
+  if (fs.existsSync(updaterDir)) {
+    try {
+      fs.rmSync(updaterDir, { recursive: true, force: true });
+      fs.mkdirSync(updaterDir);
+      console.log('[+] Cleared blitz-updater cache.');
+    } catch (e) {
+      console.warn('[!] Could not clear blitz-updater:', e.message);
+    }
+  }
 
   const targetAsar = path.join(localAppData, 'Programs', 'Blitz', 'resources', 'app.asar');
   const coreBinaries = path.join(localAppData, 'Programs', 'Blitz', 'resources', 'binaries', 'blitz_core.node');
@@ -455,6 +498,7 @@ async function main() {
   patchBlitzEntry(path.join(tempDir, 'src', 'blitz-entry.js'));
   patchElectronWindowHandlers(path.join(tempDir, 'src', 'electronWindowHandlers.js'));
   patchAuth(path.join(tempDir, 'src', 'auth.js'));
+  patchAutoUpdater(path.join(tempDir, 'src', 'autoUpdater', 'index.js'));
 
   // 5. Repack asar
   console.log(`[*] Repacking app.asar...`);
